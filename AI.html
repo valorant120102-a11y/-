@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Live AI UI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: #000;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .ambient-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0) 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        /* 메인 아일랜드 컨테이너 */
+        .island-container {
+            position: relative;
+            z-index: 2;
+            width: 340px;
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 28px;
+            padding: 14px 24px;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            cursor: pointer;
+        }
+
+        .island-container.active {
+            width: 480px; /* 답변 공간 확보를 위해 약간 넓힘 */
+            border-radius: 24px;
+            padding: 24px;
+            background: rgba(20, 20, 20, 0.95);
+        }
+
+        .input-wrapper {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #34c759;
+            border-radius: 50%;
+            margin-right: 12px;
+            transition: background-color 0.3s;
+        }
+
+        .island-container.active .status-dot {
+            background-color: #0a84ff; /* 활성화 시 블루 */
+        }
+
+        /* 로딩 중 보라색 깜빡임 애니메이션 */
+        .status-dot.loading {
+            background-color: #bf5af2;
+            animation: dotPulse 1s infinite ease-in-out;
+        }
+
+        input {
+            width: 100%;
+            background: none;
+            border: none;
+            outline: none;
+            color: #fff;
+            font-size: 16px;
+        }
+
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.35);
+        }
+
+        /* 패널 확장 */
+        .action-panel {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .island-container.active .action-panel {
+            max-height: 400px; /* 답변 길이에 맞춰 확장 가능하도록 증가 */
+            opacity: 1;
+            margin-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 20px;
+        }
+
+        .suggestion-list {
+            list-style: none;
+        }
+
+        .suggestion-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            border-radius: 12px;
+            transition: background 0.2s;
+        }
+
+        .suggestion-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        /* ✨ AI 답변 디스플레이 스타일 */
+        .ai-display {
+            display: none;
+            animation: fadeIn 0.4s ease-out;
+            color: #fff;
+        }
+
+        .ai-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #bf5af2; /* 애플 Siri/AI 맛 보라색 */
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .ai-response {
+            font-size: 15px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.9);
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 4px;
+            white-space: pre-wrap; /* 줄바꿈 유지 */
+        }
+
+        /* 스크롤바 커스텀 */
+        .ai-response::-webkit-scrollbar {
+            width: 4px;
+        }
+        .ai-response::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.98) translateY(5px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        @keyframes dotPulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ambient-glow"></div>
+
+    <div class="island-container" id="island">
+        <div class="input-wrapper">
+            <div class="status-dot" id="status-dot"></div>
+            <input type="text" id="main-input" placeholder="질문을 입력하고 Enter를 누르세요..." autocomplete="off">
+        </div>
+        
+        <div class="action-panel">
+            <ul class="suggestion-list" id="suggestion-list">
+                <li class="suggestion-item" onclick="askPreset('오늘 날씨 어때?')">☀️ 오늘 날씨 물어보기</li>
+                <li class="suggestion-item" onclick="askPreset('짧고 멋진 문장 하나 추천해줘')">📝 문장 추천받기</li>
+                <li class="suggestion-item" onclick="askPreset('생산성을 높이는 3가지 방법은?')">🎵 생산성 팁 물어보기</li>
+            </ul>
+
+            <div class="ai-display" id="ai-display">
+                <div class="ai-header">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2L14.85 9.15L22 12L14.85 14.85L12 22L9.15 14.85L2 12L9.15 9.15L12 2Z"/>
+                    </svg>
+                    Gemini Intelligence
+                </div>
+                <div class="ai-response" id="ai-response">답변을 생성하는 중입니다...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ 여기에 본인의 Google AI Studio API 키를 입력하세요.
+        const GEMINI_API_KEY = "AQ.Ab8RN6ICLHjkVEY4K6nX7QXdUZx2HBm2IZVPNVqMCWfyLVN5Cg"; 
+        
+        // 현재 가장 빠르고 효율적인 Gemini 2.5 Flash 모델 사용
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+        const island = document.getElementById('island');
+        const input = document.getElementById('main-input');
+        const list = document.getElementById('suggestion-list');
+        const aiDisplay = document.getElementById('ai-display');
+        const aiResponse = document.getElementById('ai-response');
+        const statusDot = document.getElementById('status-dot');
+
+        // 아일랜드 클릭 활성화
+        island.addEventListener('click', (e) => {
+            island.classList.add('active');
+            input.focus();
+            e.stopPropagation();
+        });
+
+        // 외곽 클릭 시 원상복구 (인풋 초기화)
+        document.addEventListener('click', () => {
+            if(!statusDot.classList.contains('loading')) {
+                island.classList.remove('active');
+                input.value = '';
+                aiDisplay.style.display = 'none';
+                list.style.display = 'block';
+            }
+        });
+
+        // 엔터키 입력 감지 및 API 호출
+        input.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && input.value.trim() !== '') {
+                e.preventDefault();
+                await fetchGeminiResponse(input.value.trim());
+            }
+        });
+
+        // 추천 아이템 클릭 시 자동 검색
+        async function askPreset(promptText) {
+            input.value = promptText;
+            await fetchGeminiResponse(promptText);
+        }
+
+        // 🤖 Gemini API 호출 함수
+        async function fetchGeminiResponse(prompt) {
+            if (GEMINI_API_KEY === "YOUR_GEMINI_API_KEY") {
+                list.style.display = 'none';
+                aiDisplay.style.display = 'block';
+                aiResponse.innerText = "오류: 코드를 열어 'YOUR_GEMINI_API_KEY' 부분에 실제 Gemini API 키를 입력해주세요.";
+                return;
+            }
+
+            // UI 전환 및 로딩 상태 표시
+            list.style.display = 'none';
+            aiDisplay.style.display = 'block';
+            aiResponse.innerText = "생각 중...";
+            statusDot.classList.add('loading');
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: prompt + " (답변은 줄바꿈을 적절히 섞어서 친절하고 간결하게 3줄 내외로 해줘.)" }]
+                        }]
+                    })
+                });
+
+                if (!response.ok) throw new Error("API 요청 실패");
+
+                const data = await response.json();
+                
+                // Gemini 리턴 데이터 추출
+                const reply = data.candidates[0].content.parts[0].text;
+                aiResponse.innerText = reply;
+
+            } catch (error) {
+                console.error(error);
+                aiResponse.innerText = "답변을 가져오는 중 오류가 발생했습니다. API 키나 네트워크를 확인해주세요.";
+            } finally {
+                // 로딩 상태 해제
+                statusDot.classList.remove('loading');
+            }
+        }
+    </script>
+</body>
+</html>
